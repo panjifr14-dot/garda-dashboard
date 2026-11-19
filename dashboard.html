@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dasbor Garda Data Muda</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .page{max-width:980px;margin:0 auto;padding:28px 20px 48px;background:var(--paper);min-height:100dvh}
+    .hero{font:700 clamp(1.6rem,4vw,2.4rem)/1.12 var(--fd);letter-spacing:-.02em;max-width:22ch}
+    .hero em{font-style:normal;background:linear-gradient(transparent 62%,var(--kunyit) 62%)}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:8px}
+    @media(max-width:760px){.cols{grid-template-columns:1fr;gap:0}}
+    .bars .r{display:grid;grid-template-columns:110px 1fr 28px;gap:10px;align-items:center;padding:7px 0}
+    .tr{height:12px;border-radius:6px;background:var(--chip);overflow:hidden}
+    .tr i{display:block;height:100%;background:var(--pandan)}
+    table{width:100%;border-collapse:collapse}
+    th,td{text-align:left;padding:10px 6px;border-bottom:1px solid var(--line);font-size:.92rem}
+    th{color:var(--muted);font-weight:600}
+    .f{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .f input{flex:1;min-width:140px;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p class="hero" id="hero">Memuat data kunjungan</p>
+    <p class="sub" id="upd">Dasbor memuat agregat tanpa identitas warga.</p>
+    
+    <div class="cols">
+      <section>
+        <h2>Tugas menurut status</h2>
+        <div class="bars" id="t"></div>
+      </section>
+      <section>
+        <h2>Sanggah di Pojok Sanggah</h2>
+        <div class="bars" id="a"></div>
+        <p class="hint">Rujukan terkirim: <b id="ref">0</b>. Kunjungan terunggah: <b id="up">0</b>.</p>
+      </section>
+    </div>
+
+    <h2>Keluhan terhadap Garda</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Kecamatan</th>
+          <th>Keluhan</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <form class="f" id="form">
+      <input id="kec" placeholder="Kecamatan" required>
+      <input id="jen" placeholder="Apa yang terjadi?" required style="flex:3">
+      <button class="btn">Kirim keluhan</button>
+    </form>
+    
+    <p style="margin-top:24px"><a href="https://github.com/panjifr14-dot/garda-data-muda" style="color:var(--pandan);font-weight:600">&larr; Kembali ke repositori utama Garda Data Muda</a></p>
+  </div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const J = u => fetch(u).then(r => {
+      if(!r.ok) throw new Error("HTTP error " + r.status);
+      return r.json();
+    });
+
+    const bars = (el, rows, total) => {
+      el.innerHTML = rows && rows.length 
+        ? rows.map(x => `<div class="r"><span>${x.status}</span><div class="tr"><i style="width:${total ? (x.n / total * 100) : 0}%"></i></div><b>${x.n}</b></div>`).join("") 
+        : `<p class="hint">Belum ada data.</p>`;
+    };
+
+    async function load() {
+      let s, c;
+      try {
+        [s, c] = await Promise.all([J("/api/stats"), J("/api/complaints")]);
+      } catch (e) {
+        // Fallback demo data jika berjalan secara statis tanpa backend
+        s = {
+          verified: 1,
+          tasks: 3,
+          referrals: 0,
+          uploaded: 0,
+          byStatus: [
+            { status: "Baru", n: 2 },
+            { status: "Dijadwalkan", n: 1 },
+            { status: "Terverifikasi", n: 0 },
+            { status: "Terkirim", n: 0 }
+          ],
+          appeals: [
+            { status: "Diajukan", n: 1 },
+            { status: "Diperiksa", n: 1 },
+            { status: "Selesai", n: 0 }
+          ]
+        };
+        c = [
+          { kecamatan: "Kec. B", jenis: "Dugaan pungutan oleh verifikator", status: "Ditindak" },
+          { kecamatan: "Kec. D", jenis: "Kunjungan terlambat dari jadwal", status: "Selesai" },
+          { kecamatan: "Kec. A", jenis: "Salah catat alamat pada formulir", status: "Diproses" }
+        ];
+      }
+
+      $("#hero").innerHTML = `<em>${s.verified} dari ${s.tasks}</em> keluarga prioritas sudah diverifikasi`;
+      bars($("#t"), s.byStatus, s.tasks);
+      const totalAppeals = s.appeals ? s.appeals.reduce((x, y) => x + y.n, 0) : 0;
+      bars($("#a"), s.appeals, totalAppeals);
+      $("#ref").textContent = s.referrals;
+      $("#up").textContent = s.uploaded;
+
+      $("#rows").innerHTML = "";
+      (c || []).forEach(x => {
+        const tr = document.createElement("tr");
+        [x.kecamatan, x.jenis].forEach(t => {
+          const td = document.createElement("td");
+          td.textContent = t;
+          tr.append(td);
+        });
+        const td = document.createElement("td");
+        td.innerHTML = `<span class="pill ${x.status}">${x.status}</span>`;
+        tr.append(td);
+        $("#rows").append(tr);
+      });
+
+      $("#upd").textContent = "Diperbarui " + new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + ". Data demo, tanpa identitas warga.";
+    }
+
+    $("#form").onsubmit = async e => {
+      e.preventDefault();
+      const kec = $("#kec").value;
+      const jen = $("#jen").value;
+      try {
+        await fetch("/api/complaints", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kecamatan: kec, jenis: jen })
+        });
+      } catch (err) {
+        // demo static append
+        const tr = document.createElement("tr");
+        [kec, jen].forEach(t => {
+          const td = document.createElement("td");
+          td.textContent = t;
+          tr.append(td);
+        });
+        const td = document.createElement("td");
+        td.innerHTML = `<span class="pill Diproses">Diproses</span>`;
+        tr.append(td);
+        $("#rows").append(tr);
+      }
+      $("#jen").value = "";
+      $("#kec").value = "";
+      load();
+    };
+
+    load();
+    setInterval(load, 15000);
+  </script>
+</body>
+</html>
